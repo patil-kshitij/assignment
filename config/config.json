@@ -1,0 +1,10 @@
+{
+    "oAuthRedirectURL":"http://localhost:8080/github/callback",
+    "loginPrefix":"",
+    "scopes":{
+        "fullAccess":"repo"
+    },
+    "allow_signup":"false",
+    "githubOAuthURL":"https://github.com/login/oauth",
+    "githubAPIhost":"https://api.github.com"
+}
