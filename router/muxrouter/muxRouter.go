@@ -5,7 +5,6 @@ import (
 	"assignment/handlers/authorization"
 	"assignment/repositories"
 	"assignment/usecases"
-	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -30,7 +29,6 @@ func GetMuxRouter() *mux.Router {
 }
 
 func getHandler(key string) http.Handler {
-	fmt.Println(key)
 	switch key {
 
 	case authorizationHandler:

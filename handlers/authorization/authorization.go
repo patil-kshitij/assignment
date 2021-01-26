@@ -2,11 +2,11 @@ package authorization
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
 
+	"assignment/config"
 	"assignment/constants"
 	"assignment/db"
 )
@@ -34,20 +34,22 @@ func CreateHandler(uc Redirector) *AuthHandler {
 }
 
 func (ah *AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	config.AppLogger.InfoLogger.Println("recieved /github/{owner}/authorize call")
 	params := mux.Vars(r)
 	owner := params[ownerPathParam]
 	db.UserMapLock.RLock()
 	_, ok := db.UserToToken[owner]
 	db.UserMapLock.RUnlock()
 	if ok {
+		config.AppLogger.InfoLogger.Println("recieved redundant authentication request from owner:", owner)
 		w.Write([]byte("User Authenticated"))
 		return
 	}
 	ctx := context.WithValue(context.Background(), constants.UserIDKey, owner)
 	reDirectURL, err := ah.uc.Redirect(ctx)
 	if err != nil {
-		//TODO
-		fmt.Println("Error in getting redirect URL:", err)
+		w.Write([]byte("Error in getting redirect URL" + err.Error()))
+		return
 	}
 	http.Redirect(w, r, reDirectURL, http.StatusMovedPermanently)
 }
