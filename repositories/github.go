@@ -1,188 +1,201 @@
 package repositories
 
-import(
+import (
+	"encoding/json"
 	"errors"
 	"fmt"
-	"encoding/json"
-	"net/http"
 	"io/ioutil"
+	"net/http"
 
-	"assignment/httprest"
 	"assignment/config"
 	"assignment/entity"
+	"assignment/httprest"
 	"encoding/base64"
-
 )
 
-const(
+const (
 	createBranchURL = "%s/repos/%s/%s/git/refs"
-	ContentURL = "%s/repos/%s/%s/contents/%s"
-	PullReqURL = "%s/repos/%s/%s/pulls"
-	SHAReqURL = "%s/repos/%s/%s/branches/%s"
-	//createOrUpdateFileContentURL = "%s/repos/%s/%s/contents/%s"
-	
+	contentURL      = "%s/repos/%s/%s/contents/%s"
+	pullReqURL      = "%s/repos/%s/%s/pulls"
+	shaReqURL       = "%s/repos/%s/%s/branches/%s"
+
 	masterBranch = "master"
 
 	refConst = "refs/heads/%s"
 
 	authHeaderKey = "Authorization"
-	AuthToken = "token %s"
+	authToken     = "token %s"
 
-	AcceptKey = "Accept"
-	GithubAcceptValue = "application/vnd.github.v3+json"
-
-
+	acceptKey         = "Accept"
+	githubAcceptValue = "application/vnd.github.v3+json"
 )
 
-func CreateGithubImpl()GithubImpl{
+//CreateGithubImpl returns instance of CreateGithubImpl
+func CreateGithubImpl() GithubImpl {
 	return GithubImpl{}
 }
 
+//GithubImpl implements Github interface
 type GithubImpl struct{}
 
-func (g GithubImpl) GetMasterSHA(owner,repo,token string) (string,error){
-	url := fmt.Sprintf(SHAReqURL,config.AppConfig.GithubAPIURL,owner,repo,masterBranch)
+//GetMasterSHA gets sha of master branch
+func (g GithubImpl) GetMasterSHA(owner, repo, token string) (string, error) {
+	url := fmt.Sprintf(shaReqURL, config.AppConfig.GithubAPIURL, owner, repo, masterBranch)
 
 	headers := make(map[string]string)
-	headers[authHeaderKey] = fmt.Sprintf(AuthToken, token)
-	headers[AcceptKey] = GithubAcceptValue
+	headers[authHeaderKey] = fmt.Sprintf(authToken, token)
+	headers[acceptKey] = githubAcceptValue
 
-	resp,err := httprest.CallRestAPI(http.MethodGet,url,headers,nil)
+	resp, err := httprest.CallRestAPI(http.MethodGet, url, headers, nil)
 	if err != nil {
-		return "",err
+		return "", err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "",errors.New("File Content Not obtained")
+		config.AppLogger.ErrorLogger.Printf("response status for url %s is %s", url, resp.Status)
+		return "", errors.New("File Content Not obtained")
 	}
 
-	apiOutput,err := ioutil.ReadAll(resp.Body)
+	apiOutput, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "",err
+		config.AppLogger.ErrorLogger.Printf("error in reading response for url - %s, error - %s", url, err.Error())
+		return "", err
 	}
 
 	shaResp := &entity.SHAResp{}
-	err = json.Unmarshal(apiOutput,shaResp)
-	if err!= nil {
-		return "",err
+	err = json.Unmarshal(apiOutput, shaResp)
+	if err != nil {
+		config.AppLogger.ErrorLogger.Printf("error in unmarshaling response from url - %s, response - %s, error - %s", url, string(apiOutput), err.Error())
+		return "", err
 	}
 
-	return shaResp.Commit.Sha,nil
-
+	return shaResp.Commit.Sha, nil
 
 }
 
-func (g GithubImpl) CreateBranch(owner, repo, branchName, refShaID,token string) error {
-	url := fmt.Sprintf(createBranchURL,config.AppConfig.GithubAPIURL,owner,repo)
-	
+//CreateBranch creates a branch
+func (g GithubImpl) CreateBranch(owner, repo, branchName, refShaID, token string) error {
+	url := fmt.Sprintf(createBranchURL, config.AppConfig.GithubAPIURL, owner, repo)
+
 	headers := make(map[string]string)
-	headers[authHeaderKey] = fmt.Sprintf(AuthToken, token)
-	
+	headers[authHeaderKey] = fmt.Sprintf(authToken, token)
+
 	reqBody := entity.BranchReq{
-		Ref: fmt.Sprintf(refConst,branchName),
+		Ref: fmt.Sprintf(refConst, branchName),
 		Sha: refShaID,
 	}
-	reqJSON,err := json.Marshal(reqBody)
+	reqJSON, err := json.Marshal(reqBody)
 	if err != nil {
+		config.AppLogger.ErrorLogger.Printf("error in marshaling request from url - %s, request - %s, error - %s", url, reqBody, err.Error())
 		return err
 	}
-	resp,err := httprest.CallRestAPI(http.MethodPost,url,headers,reqJSON)
+	resp, err := httprest.CallRestAPI(http.MethodPost, url, headers, reqJSON)
 	if err != nil {
 		return err
 	}
 
-	apiOutput,err := ioutil.ReadAll(resp.Body)
-	fmt.Println("ApiOutput branch = ",string(apiOutput))
-	fmt.Println("Error in reading branch create output",err)
-	
+	_, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		config.AppLogger.ErrorLogger.Printf("error in reading response for url - %s, error - %s", url, err.Error())
+		return err
+	}
 
 	if resp.StatusCode != http.StatusCreated {
-		fmt.Println("Status = ",resp.StatusCode)
+		config.AppLogger.ErrorLogger.Printf("response status for url %s is %s", url, resp.Status)
 		return errors.New("Branch not created")
 	}
 	return nil
 }
 
-func (g GithubImpl) GetFileContent(owner,repo,branchName,fileName,token string) (*entity.FileContentResp,error) {
-	url := fmt.Sprintf(ContentURL,config.AppConfig.GithubAPIURL,owner,repo,fileName)
+//GetFileContent gets file content in plain text
+func (g GithubImpl) GetFileContent(owner, repo, branchName, fileName, token string) (*entity.FileContentResp, error) {
+	url := fmt.Sprintf(contentURL, config.AppConfig.GithubAPIURL, owner, repo, fileName)
 
 	headers := make(map[string]string)
-	headers[authHeaderKey] = fmt.Sprintf(AuthToken, token)
-	resp,err := httprest.CallRestAPI(http.MethodGet,url,headers,nil)
+	headers[authHeaderKey] = fmt.Sprintf(authToken, token)
+	resp, err := httprest.CallRestAPI(http.MethodGet, url, headers, nil)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil,errors.New("File Content Not obtained")
+		config.AppLogger.ErrorLogger.Printf("response status for url %s is %s", url, resp.Status)
+		return nil, errors.New("File Content Not obtained")
 	}
-	apiOutput,err := ioutil.ReadAll(resp.Body)
+	apiOutput, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil,err
+		config.AppLogger.ErrorLogger.Printf("error in reading response for url - %s, error - %s", url, err.Error())
+		return nil, err
 	}
 	fileContent := &entity.FileContentResp{}
-	err = json.Unmarshal(apiOutput,fileContent)
+	err = json.Unmarshal(apiOutput, fileContent)
 	if err != nil {
-		return nil,err
+		config.AppLogger.ErrorLogger.Printf("error in unmarshaling response from url - %s, response - %s, error - %s", url, string(apiOutput), err.Error())
+		return nil, err
 	}
 
-	Content,err := base64.StdEncoding.DecodeString(fileContent.Content)
+	Content, err := base64.StdEncoding.DecodeString(fileContent.Content)
 	if err != nil {
-		return nil,err
+		config.AppLogger.ErrorLogger.Printf("error - %s,  occured while decoding base64 file content - %s", err.Error(), fileContent.Content)
+		return nil, err
 	}
 	fileContent.Content = string(Content)
 
-	return fileContent,nil
+	return fileContent, nil
 }
 
-func (g GithubImpl) CreateORUpdateFile(owner,repo,fileName,token string, req *entity.UpdateFileReq)error{
-	url := fmt.Sprintf(ContentURL,config.AppConfig.GithubAPIURL,owner,repo,fileName)
+//CreateORUpdateFile updates file
+func (g GithubImpl) CreateORUpdateFile(owner, repo, fileName, token string, req *entity.UpdateFileReq) error {
+	url := fmt.Sprintf(contentURL, config.AppConfig.GithubAPIURL, owner, repo, fileName)
 
 	headers := make(map[string]string)
-	headers[authHeaderKey] = fmt.Sprintf(AuthToken, token)
-	headers[AcceptKey] = GithubAcceptValue
+	headers[authHeaderKey] = fmt.Sprintf(authToken, token)
+	headers[acceptKey] = githubAcceptValue
 
-	reqJSON,err := json.Marshal(req)
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		config.AppLogger.ErrorLogger.Printf("error in marshaling request from url - %s, request - %s, error - %s", url, req, err.Error())
+		return err
+	}
+
+	resp, err := httprest.CallRestAPI(http.MethodPut, url, headers, reqJSON)
 	if err != nil {
 		return err
 	}
 
-	resp,err := httprest.CallRestAPI(http.MethodPut,url,headers,reqJSON)
-	if err != nil {
-		return err
-	}
-
-	if  resp.StatusCode != http.StatusOK || resp.StatusCode != http.StatusCreated {
+	if (resp.StatusCode != http.StatusOK) && (resp.StatusCode != http.StatusCreated) {
+		config.AppLogger.ErrorLogger.Printf("response status for url %s is %s", url, resp.Status)
 		return err
 	}
 
 	return nil
 }
 
+//CreatePullRequest creates a pull request
 func (g GithubImpl) CreatePullRequest(owner, repo, token string, req entity.PullReq) error {
-	url := fmt.Sprintf(PullReqURL,config.AppConfig.GithubAPIURL,owner,repo)
-	
+	url := fmt.Sprintf(pullReqURL, config.AppConfig.GithubAPIURL, owner, repo)
+
 	headers := make(map[string]string)
-	headers[authHeaderKey] = fmt.Sprintf(AuthToken, token)
-	headers[AcceptKey] = GithubAcceptValue
+	headers[authHeaderKey] = fmt.Sprintf(authToken, token)
+	headers[acceptKey] = githubAcceptValue
 
-	reqJSON,err := json.Marshal(req)
-	fmt.Println("Create Pull request json marshal err =",err)
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		config.AppLogger.ErrorLogger.Printf("error in marshaling request from url - %s, request - %s, error - %s", url, req, err.Error())
+		return err
+	}
+
+	resp, err := httprest.CallRestAPI(http.MethodPost, url, headers, reqJSON)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println("Pull Req JSON",string(reqJSON))
-
-	resp,err := httprest.CallRestAPI(http.MethodPost,url,headers,reqJSON)
-	fmt.Println("Create Pull request call err =",err)
+	_, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
+		config.AppLogger.ErrorLogger.Printf("error in reading response for url - %s, error - %s", url, err.Error())
 		return err
 	}
 
-	apiOutput,err := ioutil.ReadAll(resp.Body)
-	fmt.Println("ApiOutput create PR = ",string(apiOutput))
-	fmt.Println("Error in reading PR create output",err)
-
-	if  resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		config.AppLogger.ErrorLogger.Printf("response status for url %s is %s", url, resp.Status)
 		return errors.New("Some erroneous status")
 	}
 

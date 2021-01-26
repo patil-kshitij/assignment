@@ -16,14 +16,15 @@ const (
 func RootCmd() error {
 	configFile := flag.String("config", defaultConfigFile, "provide path to json configuration file")
 	flag.Parse()
-	err := config.ReadConfig(*configFile)
+	err := config.LoadApplication(*configFile)
 	if err != nil {
-		fmt.Println("error in reading config file = ", err)
+		fmt.Println("error in loading application = ", err)
 	}
 	r := router.NewRouter()
 	err = http.ListenAndServe(":8080", r)
 	if err != nil {
-		fmt.Println("Error :", err)
+		config.AppLogger.ErrorLogger.Fatal("Error occured while listening :", err)
+		//fmt.Println("Error :", err)
 	}
 	return nil
 }
