@@ -34,7 +34,7 @@ func CreateHandler(uc Redirector) *AuthHandler {
 }
 
 func (ah *AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	config.AppLogger.InfoLogger.Println("recieved /github/{owner}/{repo}/{branch} call")
+	config.AppLogger.InfoLogger.Println("recieved /github/{owner}/authorize call")
 	params := mux.Vars(r)
 	owner := params[ownerPathParam]
 	db.UserMapLock.RLock()
